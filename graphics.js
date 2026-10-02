@@ -29,7 +29,7 @@ export async function exportPNG(selection,month,division,format,options={}) {
  const cache=await cachedMedia();const images=await Promise.all(urls.map(url=>loadImage(cache[url]?new URL(cache[url],import.meta.url).href:url)));const bg=images[0];ctx.fillStyle='#0a1420';ctx.fillRect(0,0,w,h);
  if(bg) {const scale=Math.max(w/bg.width,h/bg.height);ctx.drawImage(bg,(w-bg.width*scale)/2,(h-bg.height*scale)/2,bg.width*scale,bg.height*scale);} else missing.push('PHM pozadí');
  const gradient=ctx.createLinearGradient(0,0,0,h);gradient.addColorStop(0,'#05101b77');gradient.addColorStop(1,'#08121df2');ctx.fillStyle=gradient;ctx.fillRect(0,0,w,h);
- const text=(s,x,y,size,color='#fff',align='left',weight=800,max=w,family='PHM Hitch')=>{ctx.textAlign=align;ctx.fillStyle=color;ctx.font=`${weight} ${size}px "${family}", sans-serif`;ctx.fillText(s,x,y,max);};
+ const text=(s,x,y,size,color='#fff',align='left',weight=800,max=w,family='PHM Hitch')=>{ctx.textAlign=align;ctx.fillStyle=color;ctx.font=`${weight} ${size}px "${family}", "PHM Hitch", sans-serif`;ctx.fillText(s,x,y,max);};
  text('PHM / HALL OF FAME',w*.07,h*.085,portrait?27:24,'#dfff3f','left',400,w,'PHM Frontline');text(options.demo?'DEMO':'ALL STARS',w*.93,h*.085,portrait?27:24,'#dfff3f','right',400,w,'PHM Frontline');text('ALL STARS',w*.07,h*.18,portrait?112:106,'#fff','left',400,w,'PHM Pantha');
  if(images[1]) ctx.drawImage(images[1],w*.07,h*.204,45,45);
  text(`${division} · ${monthLabel(month)}`,images[1]?w*.07+60:w*.07,h*.23,portrait?34:31,'#c6eaf5','left',600,w*.86);
