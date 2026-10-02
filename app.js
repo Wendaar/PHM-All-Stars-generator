@@ -9,6 +9,7 @@ try { const data=JSON.parse(localStorage.getItem(STORE)||'null');if(data?.schema
 const current=()=>snapshots.find(s=>s.id===$('snapshot').value)||snapshots[0];
 const selectionKey=()=>`${current().id}|${$('month').value}|${$('division').value}`;
 const selection=()=>saved[selectionKey()]||empty();
+function resolveCandidate(list,entry){const id=typeof entry==='string'?entry:entry.id;const exact=list.find(p=>p.id===id);if(exact)return exact;const matches=list.filter(p=>p.playerId===id&&(!entry.teamId||p.teamId===entry.teamId)&&(!entry.team||p.team===entry.team));return matches.length===1?matches[0]:null;}
 function toast(message){$('toast').textContent=message;$('toast').hidden=false;clearTimeout(toast.timer);toast.timer=setTimeout(()=>$('toast').hidden=true,5500);}
 function persist(){try{localStorage.setItem(STORE,JSON.stringify({schema:1,snapshots:snapshots.filter(s=>!s.demo&&!s.bundled),selections:saved}));}catch{toast('Úložiště prohlížeče je plné. Exportujte sestavu do JSON; data zůstanou dostupná do zavření stránky.');}}
 function sources(id){$('snapshot').innerHTML=snapshots.filter(s=>!s.baselineOnly).map(s=>`<option value="${e(s.id)}">${e(s.label)} · ${e(s.mode==='monthly'?s.month:s.asOf)}</option>`).join('');if(id)$('snapshot').value=id;divisions();}
@@ -21,9 +22,9 @@ function render(){
  const previous=snapshots.find(x=>x.asOf===bounds.before&&x.mode==='cumulative'&&sameSeason(x))||snapshots.find(x=>x.baselineOnly&&x.periodException?.approved&&x.periodException.creditedMonth===bounds.before.slice(0,7)&&x.asOf>bounds.before&&x.asOf<bounds.end&&sameSeason(x));
  try{result=nominate(s,previous,month,$('division').value);}catch(error){result={F:[],D:[],G:[],warnings:[error.message],issues:[],games:0,ready:false};}
  // Stored selections are reconciled against current candidates before export.
- const clean=selection();let changed=false;for(const r of ['F','D','G']){const valid=clean[r].filter(id=>result[r].some(p=>p.id===id));if(valid.length!==clean[r].length){clean[r]=valid;changed=true;}}if(changed){saved[selectionKey()]=clean;persist();}
+ const clean=selection();let changed=false,ambiguous=false;for(const r of ['F','D','G']){const valid=clean[r].map(id=>{const p=resolveCandidate(result[r],id);if(!p)ambiguous=true;return p?.id;}).filter(Boolean);if(JSON.stringify(valid)!==JSON.stringify(clean[r])){clean[r]=valid;changed=true;}}if(changed){saved[selectionKey()]=clean;persist();if(ambiguous)toast('Část staršího výběru nelze přiřadit k jednomu týmu. Vyberte tyto hráče znovu, nebo načtěte uložený JSON sestavy.');}
  $('source-label').textContent=s.demo?'DEMO · smyšlená data':`${s.season} · ${s.periodException?.approved&&s.mode==='monthly'?'zářijový výběr · schválená výjimka':s.mode==='monthly'?'měsíční export':'rozdíl uzávěrek'}`;
- $('notice').textContent=s.demo?'Pracujete s ukázkovými daty. Pro skutečné nominace nahrajte HMS export.':(result.ready&&!s.periodException?.approved?'Statistiky odpovídají potvrzenému období. ':'')+result.warnings.filter(w=>!w.startsWith('Pozice')).join(' ');
+ $('notice').textContent=s.demo?'Pracujete s ukázkovými daty. Pro skutečné nominace nahrajte HMS export.':(result.ready&&!s.periodException?.approved?'Statistiky odpovídají potvrzenému období. ':'')+result.warnings.filter(w=>!w.startsWith('Každý hráč')).join(' ');
  $('quality').innerHTML=[...result.warnings,...result.issues].map(w=>`<li>${e(w)}</li>`).join('');
  $('games-count').textContent=`${result.games} zápasů ${s.periodException?.approved?'v zářijovém výběru':'v měsíci'}`;
  document.querySelectorAll('[data-role]').forEach(button=>{button.classList.toggle('active',button.dataset.role===role);button.setAttribute('aria-pressed',String(button.dataset.role===role));button.querySelector('span').textContent=`${selection()[button.dataset.role].length} / ${LIMITS[button.dataset.role]}`;});
@@ -32,7 +33,7 @@ function render(){
  $('candidates').innerHTML=display.length?display.map(p=>{
   const selected=selection()[role].includes(p.id),rank=all.indexOf(p)+1;
   const metrics=p.manual?'Statistiky brankáře nejsou dostupné':role==='G'?`${(p.sv*100).toFixed(1)} % zákroků · ${p.ga} GA · ${p.so??'—'} SO`:`${p.points} bodů · ${p.goals} G + ${p.assists} A · ${p.gp} zápasy`;
-  const reason=p.manual?'Jonášův ruční výběr':`${Math.round(p.coverage*100)} % zápasů týmu · ${p.stars??'—'} hvězdy${p.eligible?'':' · nesplňuje většinu zápasů'}${role==='D'?' · preferovaná pozice D':''}`;
+  const reason=p.manual?'Jonášův ruční výběr':`${Math.round(p.coverage*100)} % zápasů týmu · ${p.stars??'—'} hvězdy${p.eligible?'':' · nesplňuje většinu zápasů'}${p.positionUnverified?' · pozice neověřena · nabídnut v útoku i obraně':role==='D'?' · preferovaná pozice D':''}`;
   return `<button class="candidate ${selected?'selected':''}" data-player="${e(p.id)}" aria-pressed="${selected}"><span class="rank">${p.manual?'G':String(rank).padStart(2,'0')}</span><span><strong>${e(p.name)}</strong><span class="team">${e(p.team)}</span><span class="metrics">${e(metrics)}</span><span class="reason">${e(reason)}</span></span><span class="check">${selected?'✓':'+'}</span></button>`;
  }).join(''):`<div class="empty">${result.ready?'Pro tuto pozici a období nejsou použitelní kandidáti. Zkontrolujte pozice a podklady.':'Nejprve doplňte správné podklady pro tento měsíc.'}</div>`;
  const players=playerSelection(),count=Object.values(players).flat().length;$('progress').textContent=`${count} / 6 vybráno`;
@@ -75,7 +76,7 @@ $('load-selection').addEventListener('change',async()=>{try{
  const file=$('load-selection').files[0];if(!file)return;if(file.size>1024*1024)throw Error('Soubor sestavy je příliš velký.');const data=JSON.parse(await file.text());if(data.schema!==1||!/^\d{4}-\d{2}$/.test(data.month)||!groupsOf(current()).includes(data.division))throw Error('Sestava nemá platný formát nebo její divize chybí v aktuálním zdroji.');
  if(!!data.demo!==!!current().demo)throw Error('Ukázkovou sestavu lze načíst jen nad ukázkovými daty.');
  const oldMonth=$('month').value,oldDivision=$('division').value;$('month').value=data.month;$('division').value=data.division;render();
- let next=empty();try{for(const r of ['F','D','G']){if(!Array.isArray(data.selection?.[r])||data.selection[r].length!==LIMITS[r])throw Error('Sestava musí mít 3 útočníky, 2 obránce a 1 brankáře.');for(const p of data.selection[r]){const c=result[r].find(x=>x.id===p.id);if(!c)throw Error(`Hráč ${p.name||p.id} není dostupný v tomto zdroji a období.`);next=toggleSelection(next,c);}}}catch(error){$('month').value=oldMonth;$('division').value=oldDivision;render();throw error;}
+ let next=empty();try{for(const r of ['F','D','G']){if(!Array.isArray(data.selection?.[r])||data.selection[r].length!==LIMITS[r])throw Error('Sestava musí mít 3 útočníky, 2 obránce a 1 brankáře.');for(const p of data.selection[r]){const c=resolveCandidate(result[r],p);if(!c)throw Error(`Hráče ${p.name||p.id} nelze jednoznačně přiřadit k týmu v tomto zdroji a období.`);next=toggleSelection(next,c);}}}catch(error){$('month').value=oldMonth;$('division').value=oldDivision;render();throw error;}
  saved[selectionKey()]=next;if(['portrait','landscape'].includes(data.format))$('format').value=data.format;persist();render();toast('Sestava načtena a ověřena proti aktuálním datům.');
 }catch(error){toast(error.message);}finally{$('load-selection').value='';}});
 sources(defaultId);render();

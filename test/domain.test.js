@@ -9,3 +9,23 @@ test('cumulative counters differ, ratios recompute; never subtract percentages',
 test('missing baseline, reset, transfer and impossible GP are flagged',()=>{const s=demoSnapshot();s.mode='cumulative';const b=structuredClone(s);b.asOf='2026-08-31';b.data.Statistics=b.data.Statistics.filter(p=>p.player!=='p2-0');b.data.Statistics.find(p=>p.player==='p2-1').gp=99;let r=nominate(s,b,'2026-09','Klasik');assert.ok(r.issues.some(i=>i.includes('Chybí předchozí')));assert.ok(r.issues.some(i=>i.includes('Záporný')));assert.ok(!r.F.some(p=>p.id==='p2-0'));s.mode='monthly';s.data.Statistics.find(p=>p.player==='p2-0').gp=99;r=nominate(s,null,'2026-09','Klasik');assert.ok(!r.F.some(p=>p.id==='p2-0'));});
 test('no goalies data allows manual goalie only',()=>{const s=demoSnapshot();s.data.Goalies=[];const r=nominate(s,null,'2026-09','Super');assert.equal(r.G.length,2);assert.ok(r.G.every(p=>p.manual));});
 test('unknown columns and duplicate aggregate rows fail rather than fabricate',()=>{assert.throws(()=>importData({Teams:[{ID:'t'}]},detectMappings({}),{}));const s=demoSnapshot();s.data.Statistics.push({...s.data.Statistics[0]});assert.throws(()=>nominate(s,null,'2026-09','Hobby Fire'),/více souhrnných/);});
+test('one person in two teams has separate stats, coverage, selection and goalie entries',()=>{
+ const s=demoSnapshot();const stat=s.data.Statistics.find(p=>p.player==='p2-0');
+ const other=s.data.Teams.find(t=>t.group==='Klasik'&&t.id!==stat.team);
+ s.data.Statistics.push({...stat,team:other.id,gp:2,goals:1,assists:0});
+ const goalie=s.data.Goalies.find(p=>p.player.startsWith('p2-'));const otherGoalieTeam=s.data.Teams.find(t=>t.group==='Klasik'&&t.id!==goalie.team);s.data.Goalies.push({...goalie,team:otherGoalieTeam.id,gp:2});
+ const r=nominate(s,null,'2026-09','Klasik');const entries=r.F.filter(p=>p.playerId==='p2-0');
+ assert.equal(entries.length,2);assert.notEqual(entries[0].id,entries[1].id);
+ const transferred=entries.find(p=>p.teamId===other.id);assert.equal(transferred.points,1);assert.equal(transferred.gp,2);assert.equal(transferred.coverage,2/r.teamGames[other.id]);
+ let selected={F:[],D:[],G:[]};for(const p of entries)selected=toggleSelection(selected,p);assert.equal(selected.F.length,2);
+ assert.equal(r.G.filter(p=>p.playerId===goalie.player).length,2);
+});
+test('missing or unrecognized skater position appears in both lists without score penalty',()=>{
+ for(const position of ['', 'neznámá']){
+  const s=demoSnapshot(),player=s.data.Players.find(p=>p.id==='p2-0');player.position=position;
+  const r=nominate(s,null,'2026-09','Klasik'),f=r.F.find(p=>p.playerId===player.id),d=r.D.find(p=>p.playerId===player.id);
+  assert.ok(f&&d&&f.positionUnverified&&d.positionUnverified);assert.equal(f.score,d.score);assert.equal(f.id,d.id);
+  assert.throws(()=>toggleSelection(toggleSelection({F:[],D:[],G:[]},f),d),/jiné pozici/);
+  assert.ok(!r.G.some(p=>p.playerId===player.id));
+ }
+});

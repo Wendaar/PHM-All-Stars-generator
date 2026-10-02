@@ -31,7 +31,7 @@ function normalize(raw,map) { return Object.fromEntries(Object.entries(SCHEMA).m
 export function importData(raw,map,meta) {
  for(const sheet of ['Teams','Players','Games','Statistics']) if(!raw[sheet]?.length) throw Error(`Chybí list ${sheet} nebo je prázdný.`);
  const data=normalize(raw,map);
- for(const [sheet,fields] of Object.entries({Teams:['id','name'],Players:['id','team','position'],Games:['date','home','away'],Statistics:['player','gp','goals','assists']})) for(const field of fields) if(!map[sheet]?.[field]) throw Error(`Vyberte sloupec ${sheet} → ${field}.`);
+ for(const [sheet,fields] of Object.entries({Teams:['id','name'],Players:['id','team'],Games:['date','home','away'],Statistics:['player','gp','goals','assists']})) for(const field of fields) if(!map[sheet]?.[field]) throw Error(`Vyberte sloupec ${sheet} → ${field}.`);
  data.Groups=data.Groups.filter(g=>g.name).map(g=>({...g,name:divisionName(g.name),id:g.id||key(g.name)}));
  const groupName=v=>divisionName(ref(data.Groups,v)?.name||v);
  for(const sheet of ['Games','Statistics','Goalies']) data[sheet].forEach(row=>{row.group=groupName(row.group);});
@@ -111,23 +111,29 @@ export function nominate(current,previous,month,division) {
    }
    const count=teamGames.get(String(s.team.id))||0, coverage=count?s.gp/count:null;
    if(!count || s.gp>count) {issues.push(`Nesouhlasí GP a zápasy týmu: ${s.player.name||s.player.id} (${s.gp}/${count}). Vyřazeno.`);continue;}
-   const roles=sheet==='Goalies'?['G']:positions(s.player.position).filter(r=>r!=='G');
-   if(!roles.length) issues.push(`Neznámá pozice: ${s.player.name||s.player.id}.`);
+   const knownRoles=positions(s.player.position);
+   const positionUnverified=sheet==='Statistics'&&!knownRoles.length;
+   const roles=sheet==='Goalies'?['G']:positionUnverified?['F','D']:knownRoles.filter(r=>r!=='G');
    for(const role of roles) {
-    const candidate={id:String(s.player.id),name:s.player.name||`${s.player.first} ${s.player.last}`.trim()||String(s.player.id),team:s.team.name,abbr:s.team.abbr||s.team.name,photo:String(s.player.photo||''),logo:String(s.team.logo||''),role,gp:s.gp,goals:s.goals,assists:s.assists,points:sheet==='Statistics'?s.goals+s.assists:null,pim:s.pim,stars:s.stars,sv:s.sv,ga:s.ga,so:s.so,coverage,score:rank(s,role),eligible:coverage>.5,manual:false};
+    const candidate={id,playerId:String(s.player.id),teamId:String(s.team.id),positionUnverified,name:s.player.name||`${s.player.first} ${s.player.last}`.trim()||String(s.player.id),team:s.team.name,abbr:s.team.abbr||s.team.name,photo:String(s.player.photo||''),logo:String(s.team.logo||''),role,gp:s.gp,goals:s.goals,assists:s.assists,points:sheet==='Statistics'?s.goals+s.assists:null,pim:s.pim,stars:s.stars,sv:s.sv,ga:s.ga,so:s.so,coverage,score:rank(s,role),eligible:coverage>.5,manual:false};
     result[role].push(candidate);
    }
   }
  }
  // Goalies always available for manual selection when counters aren't usable.
- for(const p of d.Players) {const team=ref(d.Teams,p.team); if(!team||!teamIds.has(String(team.id))||!positions(p.position).includes('G')||result.G.some(g=>g.id===String(p.id))) continue; result.G.push({id:String(p.id),name:p.name||`${p.first} ${p.last}`.trim(),team:team.name,abbr:team.abbr||team.name,photo:String(p.photo||''),logo:String(team.logo||''),role:'G',manual:true,eligible:false,score:-Infinity});}
- for(const role of ['F','D','G']) {
-  const counts=new Map();for(const p of result[role])counts.set(p.id,(counts.get(p.id)||0)+1);
-  const ambiguous=result[role].filter(p=>counts.get(p.id)>1);
-  for(const p of ambiguous) issues.push(`Více týmů ve stejné divizi: ${p.name}. MVP hráče vyřazuje, dokud není souhrn jednoznačný.`);
-  result[role]=result[role].filter(p=>counts.get(p.id)===1).sort((a,b)=>Number(b.eligible)-Number(a.eligible)||b.score-a.score||a.name.localeCompare(b.name,'cs'));
+ for(const p of d.Players) {
+  if(!positions(p.position).includes('G'))continue;
+  const refs=[...String(p.team).split(',').map(v=>ref(d.Teams,v)),...[...d.Statistics,...d.Goalies].filter(s=>String(s.player)===String(p.id)&&divisionName(s.group)===division).map(s=>ref(d.Teams,s.team))];
+  for(const team of new Set(refs.filter(Boolean))){
+   const id=`${p.id}|${team.id}|${key(division)}`;
+   if(!teamIds.has(String(team.id))||result.G.some(g=>g.id===id))continue;
+   result.G.push({id,playerId:String(p.id),teamId:String(team.id),name:p.name||`${p.first} ${p.last}`.trim(),team:team.name,abbr:team.abbr||team.name,photo:String(p.photo||''),logo:String(team.logo||''),role:'G',manual:true,eligible:false,score:-Infinity});
+  }
  }
- warnings.push('Pozice jsou preferované z Players; skutečné posty v zápasech nejsou ověřené. Obránci mají stejné bodové hodnocení jako útočníci, protože chybí obranné metriky.');
+ for(const role of ['F','D','G']) {
+  result[role].sort((a,b)=>Number(b.eligible)-Number(a.eligible)||b.score-a.score||a.name.localeCompare(b.name,'cs'));
+ }
+ warnings.push('Každý hráč × tým má samostatné statistiky a nominaci. Pozice jsou preferované z Players; hráči bez rozpoznané pozice jsou v útočnících i obráncích s označením neověřené pozice. Skutečné posty v zápasech nejsou ověřené. Obránci mají stejné bodové hodnocení jako útočníci, protože chybí obranné metriky.');
  result.issues=[...new Set(issues)]; return result;
 }
 export function toggleSelection(selection,candidate) {

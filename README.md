@@ -13,7 +13,10 @@ a 4 zápasy jednoho říjnového hracího dne. Výjimka je uložená i v exporte
 
 Zvolte měsíc a divizi, projděte shortlist a označte finálních šest hráčů.
 Pozice jsou preferované z Players; detaily zápasů se nescrapují.
-Chybějící pozice a nejasné statistiky jsou uvedené pod nominacemi.
+Hráči bez rozpoznané pozice se nabízejí v útoku i obraně, s označením „pozice
+neověřena“ a bez snížení skóre. Každý hráč za každý tým má samostatnou nominaci,
+statistiky a podíl zápasů; různé týmy se nesčítají. Stejnou nominaci za stejný
+tým nelze vybrat současně do útoku i obrany. Nejasné statistiky jsou uvedené pod nominacemi.
 Výběr je uložený v prohlížeči; přenáší se pomocí JSON sestavy.
 PNG funguje pro článek i sítě, HTML/iframe obsahuje sestavu přímo v kódu.
 Ukázková data jsou samostatné označené demo se smyšlenými hráči.
