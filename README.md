@@ -33,6 +33,9 @@ Chybějící předchozí řádky a záporné přírůstky vyžadují kontrolu.
 - graphics.js: infografika, PNG a HTML/iframe
 - data/2026-09.json: snímek sportovních dat bez kontaktních údajů
 - assets/: PHM pozadí a veřejné obrázky známé ze zářijového exportu
+- assets/fonts/: dodané Pantha, Frontline a Hitch Grotesk. Pantha pro nadpis
+  ALL STARS, Frontline pro popisky, Hitch pro běžný text a jména. PNG čeká na
+  načtení fontů; samostatný HTML/iframe je obsahuje přímo jako vložené soubory.
 - assets/media-map.json: lokální kopie pro PNG, protože HMS server blokuje CORS
 - vendor/: SheetJS CE 0.20.3, Apache-2.0
 - test/: ověření importu a nominačních pravidel

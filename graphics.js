@@ -10,7 +10,8 @@ export function graphicHTML(selection,month,division,format,{demo=false,groupLog
 }
 export async function imageData(url) { const response=await fetch(url); if(!response.ok) throw Error('Pozadí nelze načíst.'); const blob=await response.blob();return new Promise(resolve=>{const r=new FileReader();r.onload=()=>resolve(r.result);r.readAsDataURL(blob);}); }
 export async function exportDocument(selection,month,division,format,options={}) {
- const css=await (await fetch(new URL('./styles.css',import.meta.url))).text();
+ let css=await (await fetch(new URL('./styles.css?v=brand-fonts-1',import.meta.url))).text();
+ for(const file of ['Pantha-Regular.otf','Frontline-Regular.otf','hitch-grotesk-VF.ttf']){const path=`./assets/fonts/${file}`;css=css.replaceAll(path,await imageData(new URL(path,import.meta.url)));}
  const background=await imageData(new URL(`./assets/${format}.png`,import.meta.url));
  // Keep remote photo URLs in HTML; PNG uses a safe CORS fallback separately.
  const html=graphicHTML(selection,month,division,format,{...options,background});
@@ -21,13 +22,15 @@ let mediaMap;
 async function cachedMedia(){if(!mediaMap)mediaMap=fetch(new URL('./assets/media-map.json',import.meta.url)).then(r=>r.ok?r.json():{}).catch(()=>({}));return mediaMap;}
 function loadImage(url) { return new Promise(resolve=> {if(!url){resolve(null);return;} const img=new Image();img.crossOrigin='anonymous';let timer=setTimeout(()=>resolve(null),7000);img.onload=()=>{clearTimeout(timer);resolve(img);};img.onerror=()=>{clearTimeout(timer);resolve(null);};img.src=url;}); }
 export async function exportPNG(selection,month,division,format,options={}) {
+ await Promise.all(['400 48px "PHM Pantha"','400 24px "PHM Frontline"','800 32px "PHM Hitch"'].map(font=>document.fonts.load(font)));
+ await document.fonts.ready;
  const portrait=format==='portrait',w=portrait?1080:1600,h=portrait?1920:1000;const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;const ctx=canvas.getContext('2d'),missing=[];
  const players=Object.values(selection).flat();const urls=[new URL(`./assets/${format}.png`,import.meta.url).href,safeImage(options.groupLogo),...players.flatMap(p=>[safeImage(p.photo),safeImage(p.logo)])];
  const cache=await cachedMedia();const images=await Promise.all(urls.map(url=>loadImage(cache[url]?new URL(cache[url],import.meta.url).href:url)));const bg=images[0];ctx.fillStyle='#0a1420';ctx.fillRect(0,0,w,h);
  if(bg) {const scale=Math.max(w/bg.width,h/bg.height);ctx.drawImage(bg,(w-bg.width*scale)/2,(h-bg.height*scale)/2,bg.width*scale,bg.height*scale);} else missing.push('PHM pozadí');
  const gradient=ctx.createLinearGradient(0,0,0,h);gradient.addColorStop(0,'#05101b77');gradient.addColorStop(1,'#08121df2');ctx.fillStyle=gradient;ctx.fillRect(0,0,w,h);
- const text=(s,x,y,size,color='#fff',align='left',weight=800,max=w)=>{ctx.textAlign=align;ctx.fillStyle=color;ctx.font=`${weight} ${size}px system-ui, sans-serif`;ctx.fillText(s,x,y,max);};
- text('PHM / HALL OF FAME',w*.07,h*.085,portrait?27:24,'#dfff3f');text(options.demo?'DEMO':'ALL STARS',w*.93,h*.085,portrait?27:24,'#dfff3f','right');text('ALL STARS',w*.07,h*.18,portrait?112:106);
+ const text=(s,x,y,size,color='#fff',align='left',weight=800,max=w,family='PHM Hitch')=>{ctx.textAlign=align;ctx.fillStyle=color;ctx.font=`${weight} ${size}px "${family}", sans-serif`;ctx.fillText(s,x,y,max);};
+ text('PHM / HALL OF FAME',w*.07,h*.085,portrait?27:24,'#dfff3f','left',400,w,'PHM Frontline');text(options.demo?'DEMO':'ALL STARS',w*.93,h*.085,portrait?27:24,'#dfff3f','right',400,w,'PHM Frontline');text('ALL STARS',w*.07,h*.18,portrait?112:106,'#fff','left',400,w,'PHM Pantha');
  if(images[1]) ctx.drawImage(images[1],w*.07,h*.204,45,45);
  text(`${division} · ${monthLabel(month)}`,images[1]?w*.07+60:w*.07,h*.23,portrait?34:31,'#c6eaf5','left',600,w*.86);
  let imageIndex=2;
@@ -37,9 +40,9 @@ export async function exportPNG(selection,month,division,format,options={}) {
    ctx.save();ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.clip();ctx.fillStyle='#142c3f';ctx.fillRect(x-radius,y-radius,radius*2,radius*2);
    if(photo){const scale=Math.max(radius*2/photo.width,radius*2/photo.height);ctx.drawImage(photo,x-photo.width*scale/2,y-photo.height*scale/2,photo.width*scale,photo.height*scale);}else text(p?initials(p.name):'＋',x,y+14,portrait?50:39,'#91e8ff','center');ctx.restore();ctx.strokeStyle='#91e8ff';ctx.lineWidth=3;ctx.beginPath();ctx.arc(x,y,radius,0,Math.PI*2);ctx.stroke();
    if(portrait){const words=(p?.name||'Vyberte hráče').split(' ');text(words.shift(),x,y+radius+42,32,'#fff','center',800,gap*.93);text(words.join(' '),x,y+radius+79,32,'#fff','center',800,gap*.93);}else text(p?.name||'Vyberte hráče',x,y+radius+34,27,'#fff','center',800,gap*.93);
-   const ty=y+radius+(portrait?119:64);if(logo)ctx.drawImage(logo,x-72,ty-23,30,30);text(p?.abbr||'—',x+(logo?12:0),ty,portrait?25:22,'#b7c9d8','center',600,gap*.7);text(roles[role],x,ty+(portrait?39:30),portrait?23:18,'#dfff3f','center',700);
+   const ty=y+radius+(portrait?119:64);if(logo)ctx.drawImage(logo,x-72,ty-23,30,30);text(p?.abbr||'—',x+(logo?12:0),ty,portrait?25:22,'#b7c9d8','center',600,gap*.7);text(roles[role],x,ty+(portrait?39:30),portrait?23:18,'#dfff3f','center',400,w,'PHM Frontline');
   }
  });
- ctx.strokeStyle='#ffffff33';ctx.beginPath();ctx.moveTo(w*.07,h*.944);ctx.lineTo(w*.93,h*.944);ctx.stroke();text(options.demo?'UKÁZKOVÁ SESTAVA · SMYŠLENÁ DATA':'HVĚZDY MĚSÍCE',w*.07,h*.975,portrait?20:18,'#a4b8c9');text('HMS INSIGHTS',w*.93,h*.975,portrait?20:18,'#a4b8c9','right');
+ ctx.strokeStyle='#ffffff33';ctx.beginPath();ctx.moveTo(w*.07,h*.944);ctx.lineTo(w*.93,h*.944);ctx.stroke();text(options.demo?'UKÁZKOVÁ SESTAVA · SMYŠLENÁ DATA':'HVĚZDY MĚSÍCE',w*.07,h*.975,portrait?20:18,'#a4b8c9','left',400,w,'PHM Frontline');text('HMS INSIGHTS',w*.93,h*.975,portrait?20:18,'#a4b8c9','right',400,w,'PHM Frontline');
  return {blob:await new Promise(resolve=>canvas.toBlob(resolve,'image/png')),missing:[...new Set(missing)]};
 }
