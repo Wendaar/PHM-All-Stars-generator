@@ -1,4 +1,4 @@
-import { SCHEMA, LIMITS, detectMappings, importData, groupsOf, nominate, toggleSelection, monthBounds, sheetRowsToObjects } from './domain.js';
+import { SCHEMA, LIMITS, detectMappings, importData, groupsOf, nominate, toggleSelection, monthBounds, sheetRowsToObjects } from './domain.js?v=teams-positions-2';
 import { demoSnapshot } from './demo.js';
 import { escapeHTML as e, graphicHTML, exportPNG, exportDocument } from './graphics.js';
 const $=id=>document.getElementById(id),STORE='phm-all-stars-v1',empty=()=>({F:[],D:[],G:[]});
